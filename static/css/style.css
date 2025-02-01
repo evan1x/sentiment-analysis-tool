@@ -1,27 +1,105 @@
 body {
     background-color: #f8f9fa;
+    color: #212529;
 }
 
 .card {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: none;
+    margin-bottom: 1rem;
+}
+
+.card-title {
+    color: #495057;
+    font-weight: 600;
 }
 
 textarea {
     resize: vertical;
+    min-height: 100px;
 }
 
 #result {
     transition: all 0.3s ease;
 }
 
+/* Sentiment colors */
 .positive {
     color: #198754;
+    font-weight: 500;
 }
 
 .negative {
     color: #dc3545;
+    font-weight: 500;
 }
 
 .neutral {
     color: #6c757d;
+    font-weight: 500;
+}
+
+/* Key phrases styling */
+.key-phrase {
+    background-color: #e9ecef;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    color: #495057;
+    display: inline-block;
+    margin: 0.25rem;
+}
+
+.key-phrase .count {
+    background-color: #6c757d;
+    color: white;
+    padding: 0.1rem 0.4rem;
+    border-radius: 10px;
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+}
+
+/* Sentence analysis styling */
+.sentence-analysis {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.sentence-item {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: #f8f9fa;
+    border-left: 4px solid #6c757d;
+}
+
+.sentence-item.positive {
+    border-left-color: #198754;
+}
+
+.sentence-item.negative {
+    border-left-color: #dc3545;
+}
+
+.sentence-item.neutral {
+    border-left-color: #6c757d;
+}
+
+.sentence-metrics {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+/* Loading spinner */
+#loadingSpinner {
+    margin: 2rem 0;
+}
+
+/* Charts */
+canvas {
+    max-width: 100%;
+    height: auto !important;
 }
