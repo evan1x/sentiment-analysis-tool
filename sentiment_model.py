@@ -6,6 +6,10 @@ from nltk.corpus import stopwords
 from nltk.tag import pos_tag
 from collections import Counter
 from string import punctuation
+from rake_nltk import Rake
+import spacy
+from transformers import pipeline
+import torch
 
 class SentimentAnalyzer:
     def __init__(self):
@@ -25,21 +29,40 @@ class SentimentAnalyzer:
         
         self.stopwords = set(stopwords.words('english'))
         self.punctuation = set(punctuation)
+        
+        # Initialize RAKE for keyword extraction
+        self.rake = Rake()
+        
+        # Load spaCy model for entity recognition and dependency parsing
+        try:
+            self.nlp = spacy.load('en_core_web_sm')
+        except OSError:
+            spacy.cli.download('en_core_web_sm')
+            self.nlp = spacy.load('en_core_web_sm')
+        
+        # Initialize transformer model for sentiment analysis
+        self.sentiment_pipeline = pipeline(
+            "sentiment-analysis",
+            model="distilbert-base-uncased-finetuned-sst-2-english",
+            device=0 if torch.cuda.is_available() else -1
+        )
 
     def preprocess_text(self, text):
         """Clean and preprocess the input text."""
+        if not text:
+            return ""
+            
         # Convert to lowercase
         text = text.lower()
         
         # Remove URLs
-        text = re.sub(r'https?://\S+|www\.\S+', '', text)
+        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
         
         # Remove email addresses
         text = re.sub(r'\S+@\S+', '', text)
         
-        # Remove special characters and digits
-        text = re.sub(r'[^\w\s]', '', text)
-        text = re.sub(r'\d+', '', text)
+        # Remove special characters but keep sentence structure
+        text = re.sub(r'[^\w\s.!?]', '', text)
         
         # Remove extra whitespace
         text = ' '.join(text.split())
@@ -47,22 +70,25 @@ class SentimentAnalyzer:
         return text
 
     def get_key_phrases(self, text, num_phrases=5):
-        """Extract key phrases from the text."""
-        try:
-            nltk.data.find('taggers/averaged_perceptron_tagger')
-        except LookupError:
-            nltk.download('averaged_perceptron_tagger')
-            
-        # Tokenize and tag parts of speech
+        """Extract key phrases using multiple methods."""
+        # Use RAKE for keyword extraction
+        self.rake.extract_keywords_from_text(text)
+        rake_phrases = self.rake.get_ranked_phrases_with_scores()
+        
+        # Use spaCy for noun phrase extraction
+        doc = self.nlp(text)
+        noun_phrases = [chunk.text for chunk in doc.noun_chunks]
+        
+        # Use NLTK for additional phrase extraction
         tokens = word_tokenize(text)
         tagged = pos_tag(tokens)
         
-        # Extract noun phrases (simplified)
+        # Extract phrases based on patterns
         phrases = []
         current_phrase = []
         
         for word, tag in tagged:
-            if tag.startswith(('JJ', 'NN')):  # Adjectives and nouns
+            if tag.startswith(('JJ', 'NN', 'VB')):  # Include verbs for action phrases
                 current_phrase.append(word)
             elif current_phrase:
                 phrases.append(' '.join(current_phrase))
@@ -71,33 +97,74 @@ class SentimentAnalyzer:
         if current_phrase:
             phrases.append(' '.join(current_phrase))
         
-        # Count phrase frequencies
-        phrase_counter = Counter(phrases)
+        # Combine all phrases and count frequencies
+        all_phrases = (
+            [phrase for _, phrase in rake_phrases] +
+            noun_phrases +
+            phrases
+        )
         
-        # Return most common phrases
+        phrase_counter = Counter(all_phrases)
+        
+        # Return most common meaningful phrases
         return [{'phrase': phrase, 'count': count} 
                 for phrase, count in phrase_counter.most_common(num_phrases)
-                if phrase.strip()]  # Only include non-empty phrases
+                if len(phrase.split()) > 1 and phrase.strip()]
 
-    def get_emotion_scores(self, polarity):
-        """Convert polarity score into emotion intensities."""
+    def get_emotion_scores(self, text):
+        """Enhanced emotion detection using transformer models."""
+        # Use the transformer model for more accurate sentiment
+        result = self.sentiment_pipeline(text)[0]
+        sentiment_score = result['score'] if result['label'] == 'POSITIVE' else -result['score']
+        
+        # Calculate emotion intensities
         emotions = {
-            'joy': 0,
-            'sadness': 0,
-            'anger': 0,
-            'neutral': 0
+            'joy': max(0, sentiment_score) if sentiment_score > 0 else 0,
+            'sadness': max(0, -sentiment_score) if sentiment_score < 0 else 0,
+            'anger': max(0, -sentiment_score * 0.5) if sentiment_score < -0.5 else 0,
+            'neutral': 1 - abs(sentiment_score) if abs(sentiment_score) < 0.3 else 0
         }
         
-        if polarity > 0.5:
-            emotions['joy'] = polarity
-        elif polarity < -0.5:
-            emotions['anger'] = abs(polarity)
-        elif polarity < 0:
-            emotions['sadness'] = abs(polarity)
-        else:
-            emotions['neutral'] = 1 - abs(polarity)
-            
+        # Normalize emotions to sum to 1
+        total = sum(emotions.values())
+        if total > 0:
+            emotions = {k: v/total for k, v in emotions.items()}
+        
         return emotions
+
+    def analyze_sentence_structure(self, text):
+        """Analyze sentence structure using spaCy."""
+        doc = self.nlp(text)
+        
+        sentence_analysis = []
+        for sent in doc.sents:
+            # Get main subject and object
+            subject = None
+            obj = None
+            action = None
+            
+            for token in sent:
+                if "subj" in token.dep_:
+                    subject = token.text
+                elif "obj" in token.dep_:
+                    obj = token.text
+                elif token.pos_ == "VERB":
+                    action = token.text
+            
+            # Get named entities
+            entities = [(ent.text, ent.label_) for ent in sent.ents]
+            
+            sentence_analysis.append({
+                'text': sent.text,
+                'subject': subject,
+                'object': obj,
+                'action': action,
+                'entities': entities,
+                'length': len(sent),
+                'complexity': len([token for token in sent if token.pos_ in ['NOUN', 'VERB', 'ADJ']])
+            })
+        
+        return sentence_analysis
 
     def analyze(self, text):
         """Analyze the sentiment of the given text."""
@@ -110,7 +177,7 @@ class SentimentAnalyzer:
             # Preprocess the text
             cleaned_text = self.preprocess_text(text)
             
-            # Create TextBlob object
+            # Create TextBlob object for basic sentiment
             blob = TextBlob(cleaned_text)
             
             # Get the sentiment polarity (-1 to 1)
@@ -119,27 +186,30 @@ class SentimentAnalyzer:
             # Get the subjectivity (0 to 1)
             subjectivity = blob.sentiment.subjectivity
             
+            # Get enhanced emotion scores
+            emotions = self.get_emotion_scores(cleaned_text)
+            
             # Determine sentiment label
-            if polarity > 0.1:
-                sentiment = 'positive'
-            elif polarity < -0.1:
-                sentiment = 'negative'
-            else:
-                sentiment = 'neutral'
+            sentiment = 'positive' if polarity > 0.1 else 'negative' if polarity < -0.1 else 'neutral'
             
-            # Get emotion scores
-            emotions = self.get_emotion_scores(polarity)
-            
-            # Get key phrases
+            # Get key phrases with enhanced extraction
             key_phrases = self.get_key_phrases(cleaned_text)
             
-            # Get sentence-level analysis
+            # Get detailed sentence analysis
+            sentence_analysis = self.analyze_sentence_structure(cleaned_text)
+            
+            # Get sentence-level sentiment
             sentences = []
-            for sentence in blob.sentences:
+            for sent in blob.sentences:
+                sent_text = str(sent)
+                sent_emotions = self.get_emotion_scores(sent_text)
+                
                 sentences.append({
-                    'text': str(sentence),
-                    'polarity': sentence.sentiment.polarity,
-                    'subjectivity': sentence.sentiment.subjectivity
+                    'text': sent_text,
+                    'polarity': sent.sentiment.polarity,
+                    'subjectivity': sent.sentiment.subjectivity,
+                    'emotions': sent_emotions,
+                    'structure': next((s for s in sentence_analysis if s['text'] == sent_text), None)
                 })
             
             return {
@@ -150,10 +220,11 @@ class SentimentAnalyzer:
                 'emotions': emotions,
                 'key_phrases': key_phrases,
                 'sentences': sentences,
-                'word_count': len(cleaned_text.split())
+                'word_count': len(cleaned_text.split()),
+                'sentence_count': len(sentences)
             }
             
         except Exception as e:
             return {
-                'error': f'Analysis failed: {str(e)}'
+                'error': f'Analysis error: {str(e)}'
             }
