@@ -48,6 +48,11 @@ class SentimentAnalyzer:
 
     def get_key_phrases(self, text, num_phrases=5):
         """Extract key phrases from the text."""
+        try:
+            nltk.data.find('taggers/averaged_perceptron_tagger')
+        except LookupError:
+            nltk.download('averaged_perceptron_tagger')
+            
         # Tokenize and tag parts of speech
         tokens = word_tokenize(text)
         tagged = pos_tag(tokens)
@@ -71,7 +76,8 @@ class SentimentAnalyzer:
         
         # Return most common phrases
         return [{'phrase': phrase, 'count': count} 
-                for phrase, count in phrase_counter.most_common(num_phrases)]
+                for phrase, count in phrase_counter.most_common(num_phrases)
+                if phrase.strip()]  # Only include non-empty phrases
 
     def get_emotion_scores(self, polarity):
         """Convert polarity score into emotion intensities."""

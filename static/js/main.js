@@ -1,42 +1,54 @@
 let emotionChart = null;
 
-document.getElementById('sentimentForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const text = document.getElementById('textInput').value.trim();
-    if (!text) return;
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('analysisForm');
+    const resultsSection = document.getElementById('results');
+    const submitButton = form.querySelector('button[type="submit"]');
+    const buttonText = submitButton.querySelector('.button-text');
+    const spinner = submitButton.querySelector('.spinner-border');
 
-    // Show loading spinner
-    document.getElementById('loadingSpinner').style.display = 'block';
-    document.getElementById('result').style.display = 'none';
-
-    try {
-        const response = await fetch('/analyze', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ text: text })
-        });
-
-        const data = await response.json();
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
         
-        if (response.ok) {
-            displayResults(data);
-        } else {
-            alert(data.error || 'An error occurred during analysis');
+        const text = document.getElementById('text').value.trim();
+        if (!text) return;
+
+        // Show loading state
+        submitButton.disabled = true;
+        buttonText.textContent = 'Analyzing...';
+        spinner.classList.remove('d-none');
+        resultsSection.classList.remove('visible');
+
+        try {
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: text })
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+                displayResults(data);
+                resultsSection.classList.add('visible');
+            } else {
+                alert(data.error || 'An error occurred during analysis');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('An error occurred while connecting to the server');
+        } finally {
+            // Reset button state
+            submitButton.disabled = false;
+            buttonText.textContent = 'Analyze Text';
+            spinner.classList.add('d-none');
         }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('An error occurred while connecting to the server');
-    } finally {
-        document.getElementById('loadingSpinner').style.display = 'none';
-    }
+    });
 });
 
 function displayResults(data) {
-    const resultDiv = document.getElementById('result');
-    
     // Display overall sentiment
     updateSentimentDisplay(data);
     
@@ -48,9 +60,6 @@ function displayResults(data) {
     
     // Display sentence analysis
     displaySentenceAnalysis(data.sentences);
-    
-    // Show results
-    resultDiv.style.display = 'block';
 }
 
 function updateSentimentDisplay(data) {
@@ -78,12 +87,10 @@ function updateSentimentDisplay(data) {
 function updateEmotionChart(emotions) {
     const ctx = document.getElementById('emotionChart').getContext('2d');
     
-    // Destroy existing chart if it exists
     if (emotionChart) {
         emotionChart.destroy();
     }
     
-    // Create new chart
     emotionChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -93,22 +100,42 @@ function updateEmotionChart(emotions) {
             datasets: [{
                 data: Object.values(emotions),
                 backgroundColor: [
+                    '#dc3545', // anger - red
                     '#198754', // joy - green
-                    '#dc3545', // sadness - red
-                    '#ffc107', // anger - yellow
-                    '#6c757d'  // neutral - gray
+                    '#ffc107', // neutral - yellow
+                    '#6c757d'  // sadness - gray
                 ]
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        boxWidth: 15,
+                        font: {
+                            size: 12
+                        }
+                    }
                 },
                 title: {
                     display: true,
-                    text: 'Emotion Distribution'
+                    text: 'Emotion Distribution',
+                    padding: {
+                        top: 10,
+                        bottom: 20
+                    },
+                    font: {
+                        size: 16
+                    }
+                }
+            },
+            layout: {
+                padding: {
+                    bottom: 20
                 }
             }
         }
@@ -119,31 +146,38 @@ function displayKeyPhrases(phrases) {
     const phrasesDiv = document.getElementById('keyPhrasesResult');
     phrasesDiv.innerHTML = '';
     
-    phrases.forEach(({ phrase, count }) => {
-        const phraseElement = document.createElement('span');
-        phraseElement.className = 'key-phrase';
-        phraseElement.innerHTML = `
-            ${phrase}
-            <span class="count">${count}</span>
-        `;
-        phrasesDiv.appendChild(phraseElement);
-    });
+    if (Array.isArray(phrases)) {
+        phrases.forEach(item => {
+            const phraseElement = document.createElement('div');
+            phraseElement.className = 'key-phrase';
+            phraseElement.textContent = `${item.phrase} (${item.count})`;
+            phrasesDiv.appendChild(phraseElement);
+        });
+    } else if (phrases && typeof phrases === 'object') {
+        // Fallback for object format
+        Object.entries(phrases).forEach(([phrase, count]) => {
+            const phraseElement = document.createElement('div');
+            phraseElement.className = 'key-phrase';
+            phraseElement.textContent = `${phrase} (${count})`;
+            phrasesDiv.appendChild(phraseElement);
+        });
+    }
 }
 
 function displaySentenceAnalysis(sentences) {
-    const sentencesDiv = document.getElementById('sentencesResult');
+    const sentencesDiv = document.getElementById('sentenceAnalysis');
     sentencesDiv.innerHTML = '';
     
     sentences.forEach(sentence => {
-        const sentiment = getSentimentClass(sentence.polarity);
         const sentenceElement = document.createElement('div');
-        sentenceElement.className = `sentence-item ${sentiment}`;
+        sentenceElement.className = 'p-3 bg-light rounded mb-3';
         
+        const sentimentClass = getSentimentClass(sentence.polarity);
         sentenceElement.innerHTML = `
-            <div class="sentence-text">${sentence.text}</div>
-            <div class="sentence-metrics">
-                <span>Polarity: ${sentence.polarity.toFixed(2)}</span>
-                <span>Subjectivity: ${sentence.subjectivity.toFixed(2)}</span>
+            <div class="mb-2">${sentence.text}</div>
+            <div class="d-flex gap-3">
+                <small class="text-muted">Polarity: <span class="${sentimentClass}">${sentence.polarity.toFixed(2)}</span></small>
+                <small class="text-muted">Subjectivity: ${sentence.subjectivity.toFixed(2)}</small>
             </div>
         `;
         
@@ -152,7 +186,7 @@ function displaySentenceAnalysis(sentences) {
 }
 
 function getSentimentClass(polarity) {
-    if (polarity > 0.1) return 'positive';
-    if (polarity < -0.1) return 'negative';
-    return 'neutral';
+    if (polarity > 0.1) return 'text-success';
+    if (polarity < -0.1) return 'text-danger';
+    return 'text-secondary';
 }

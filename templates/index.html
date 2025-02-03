@@ -5,68 +5,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sentiment Analysis Tool</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/chart.js" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="text-center mb-4">Sentiment Analysis Tool</h1>
+    <div class="container py-5">
         <div class="row justify-content-center">
-            <div class="col-md-10">
-                <div class="card">
+            <div class="col-lg-10">
+                <div class="card mb-4 fade-in">
+                    <div class="card-header">
+                        <h1 class="h3 mb-0">Sentiment Analysis Tool</h1>
+                    </div>
                     <div class="card-body">
-                        <form id="sentimentForm">
-                            <div class="mb-3">
-                                <label for="textInput" class="form-label">Enter text to analyze:</label>
-                                <textarea class="form-control" id="textInput" rows="4" required></textarea>
+                        <form id="analysisForm">
+                            <div class="mb-4">
+                                <label for="text" class="form-label">Enter your text for analysis</label>
+                                <textarea class="form-control" id="text" rows="5" placeholder="Type or paste your text here..."></textarea>
                             </div>
-                            <button type="submit" class="btn btn-primary">Analyze Sentiment</button>
+                            <div class="text-end">
+                                <button type="submit" class="btn btn-primary">
+                                    <span class="button-text">Analyze Text</span>
+                                    <span class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
+                                </button>
+                            </div>
                         </form>
-                        
-                        <!-- Loading Spinner -->
-                        <div id="loadingSpinner" class="text-center mt-4" style="display: none;">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
+                    </div>
+                </div>
+
+                <div id="results" class="results-section">
+                    <div class="card fade-in">
+                        <div class="card-header">
+                            <h2 class="h4 mb-0">Analysis Results</h2>
                         </div>
-
-                        <!-- Results Section -->
-                        <div id="result" class="mt-4" style="display: none;">
-                            <h4>Analysis Results</h4>
-                            
-                            <!-- Overall Sentiment -->
-                            <div class="card mb-3">
-                                <div class="card-body">
-                                    <h5 class="card-title">Overall Sentiment</h5>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <p><strong>Sentiment:</strong> <span id="sentimentResult"></span></p>
-                                            <p><strong>Polarity:</strong> <span id="polarityResult"></span></p>
-                                            <p><strong>Subjectivity:</strong> <span id="subjectivityResult"></span></p>
-                                            <p><strong>Word Count:</strong> <span id="wordCountResult"></span></p>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-4">
+                                        <h3 class="h5 text-muted mb-3">Overall Sentiment</h3>
+                                        <div class="d-flex align-items-center mb-3">
+                                            <div class="me-4">
+                                                <div class="sentiment-label" id="sentimentResult">-</div>
+                                            </div>
                                         </div>
-                                        <div class="col-md-6">
-                                            <canvas id="emotionChart"></canvas>
+                                        <div class="row g-3">
+                                            <div class="col-6">
+                                                <div class="p-3 bg-light rounded">
+                                                    <div class="metric-value" id="polarityResult">-</div>
+                                                    <div class="metric-label">Polarity</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="p-3 bg-light rounded">
+                                                    <div class="metric-value" id="subjectivityResult">-</div>
+                                                    <div class="metric-label">Subjectivity</div>
+                                                </div>
+                                            </div>
                                         </div>
+                                    </div>
+                                    <div>
+                                        <h3 class="h5 text-muted mb-3">Text Statistics</h3>
+                                        <div class="p-3 bg-light rounded">
+                                            <div class="metric-value" id="wordCountResult">-</div>
+                                            <div class="metric-label">Word Count</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="chart-container">
+                                        <canvas id="emotionChart"></canvas>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Key Phrases -->
-                            <div class="card mb-3">
-                                <div class="card-body">
-                                    <h5 class="card-title">Key Phrases</h5>
-                                    <div id="keyPhrasesResult" class="d-flex flex-wrap gap-2">
-                                    </div>
+                            <div class="mt-4">
+                                <h3 class="h5 text-muted mb-3">Key Phrases</h3>
+                                <div id="keyPhrasesResult" class="d-flex flex-wrap gap-2">
                                 </div>
                             </div>
 
-                            <!-- Sentence Analysis -->
-                            <div class="card">
-                                <div class="card-body">
-                                    <h5 class="card-title">Sentence-Level Analysis</h5>
-                                    <div id="sentencesResult" class="sentence-analysis">
-                                    </div>
+                            <div class="mt-4">
+                                <h3 class="h5 text-muted mb-3">Sentence Analysis</h3>
+                                <div id="sentenceAnalysis" class="d-flex flex-column gap-3">
                                 </div>
                             </div>
                         </div>
