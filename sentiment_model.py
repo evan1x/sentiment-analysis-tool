@@ -266,38 +266,35 @@ class SentimentAnalyzer:
             sentiment = 'positive' if polarity > 0.1 else 'negative' if polarity < -0.1 else 'neutral'
             
             # Get key phrases with enhanced extraction
-            key_phrases = self.get_key_phrases(cleaned_text)
-            
-            # Get detailed sentence analysis
-            sentence_analysis = self.analyze_sentence_structure(cleaned_text)
+            key_phrases_data = self.get_key_phrases(cleaned_text)
+            key_phrases = [item['phrase'] for item in key_phrases_data] if isinstance(key_phrases_data, list) else []
             
             # Get sentence-level sentiment
             sentences = []
             for sent in blob.sentences:
                 sent_text = str(sent)
-                sent_emotions = self.get_emotion_scores(sent_text)
-                
                 sentences.append({
                     'text': sent_text,
-                    'polarity': sent.sentiment.polarity,
-                    'subjectivity': sent.sentiment.subjectivity,
-                    'emotions': sent_emotions,
-                    'structure': next((s for s in sentence_analysis if s['text'] == sent_text), None)
+                    'polarity': float(sent.sentiment.polarity),
+                    'subjectivity': float(sent.sentiment.subjectivity)
                 })
             
             return {
                 'text': text,
                 'sentiment': sentiment,
-                'polarity': polarity,
-                'subjectivity': subjectivity,
+                'polarity': float(polarity),
+                'subjectivity': float(subjectivity),
                 'emotions': emotions,
                 'key_phrases': key_phrases,
-                'sentences': sentences,
+                'sentence_analysis': sentences,
                 'word_count': len(cleaned_text.split()),
                 'sentence_count': len(sentences)
             }
             
         except Exception as e:
+            print(f"Error in analyze: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {
-                'error': f'Analysis error: {str(e)}'
+                'error': f'Analysis failed: {str(e)}'
             }

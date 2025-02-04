@@ -129,14 +129,6 @@ def create_analysis_pdf(result):
     heading_style = styles['Heading2']
     normal_style = styles['Normal']
     
-    # Custom style for metrics
-    metric_style = ParagraphStyle(
-        'MetricStyle',
-        parent=styles['Normal'],
-        fontSize=12,
-        spaceAfter=12
-    )
-    
     # Story (content elements)
     story = []
     
@@ -148,16 +140,17 @@ def create_analysis_pdf(result):
     story.append(Paragraph('Overall Metrics', heading_style))
     story.append(Spacer(1, 12))
     
+    # Create metrics table
     metrics_data = [
         ['Metric', 'Value'],
-        ['Sentiment', result['sentiment'].capitalize()],
-        ['Polarity', f"{result['polarity']:.2f}"],
-        ['Subjectivity', f"{result['subjectivity']:.2f}"],
-        ['Word Count', str(result['word_count'])],
-        ['Sentence Count', str(result['sentence_count'])]
+        ['Sentiment', str(result.get('sentiment', 'N/A'))],
+        ['Polarity', f"{result.get('polarity', 0):.2f}"],
+        ['Subjectivity', f"{result.get('subjectivity', 0):.2f}"],
+        ['Word Count', str(result.get('word_count', 0))],
+        ['Sentence Count', str(result.get('sentence_count', 0))]
     ]
     
-    metrics_table = Table(metrics_data, colWidths=[2*inch, 2*inch])
+    metrics_table = Table(metrics_data, colWidths=[200, 200])
     metrics_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -174,40 +167,23 @@ def create_analysis_pdf(result):
     story.append(metrics_table)
     story.append(Spacer(1, 24))
     
-    # Emotion Distribution Chart
+    # Emotions Section
     if result.get('emotions'):
         story.append(Paragraph('Emotion Distribution', heading_style))
         story.append(Spacer(1, 12))
         
+        # Create emotion chart
         img_buffer = create_emotion_chart_image(result['emotions'])
-        img = Image(img_buffer, width=4*inch, height=4*inch)
+        img = Image(img_buffer, width=300, height=300)
         story.append(img)
         story.append(Spacer(1, 24))
     
-    # Key Phrases
+    # Key Phrases Section
     if result.get('key_phrases'):
         story.append(Paragraph('Key Phrases', heading_style))
         story.append(Spacer(1, 12))
-        
-        phrases_data = [['Phrase', 'Count']]
         for phrase in result['key_phrases']:
-            phrases_data.append([phrase['phrase'], str(phrase['count'])])
-        
-        phrases_table = Table(phrases_data, colWidths=[4*inch, 1*inch])
-        phrases_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 14),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 12),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        story.append(phrases_table)
+            story.append(Paragraph(f"• {phrase}", normal_style))
         story.append(Spacer(1, 24))
     
     # Sentence Analysis
@@ -215,18 +191,32 @@ def create_analysis_pdf(result):
         story.append(Paragraph('Sentence Analysis', heading_style))
         story.append(Spacer(1, 12))
         
+        sentences_data = [['Sentence', 'Polarity', 'Subjectivity']]
         for sentence in result['sentences']:
-            # Sentence text
-            story.append(Paragraph(f"<b>Text:</b> {sentence['text']}", normal_style))
-            story.append(Spacer(1, 6))
-            
-            # Sentence metrics
-            metrics = [
-                f"Polarity: {sentence['polarity']:.2f}",
-                f"Subjectivity: {sentence['subjectivity']:.2f}"
-            ]
-            story.append(Paragraph(", ".join(metrics), metric_style))
-            story.append(Spacer(1, 12))
+            sentences_data.append([
+                Paragraph(sentence['text'], normal_style),
+                f"{sentence['polarity']:.2f}",
+                f"{sentence['subjectivity']:.2f}"
+            ])
+        
+        # Create sentences table
+        sentences_table = Table(sentences_data, colWidths=[300, 100, 100])
+        sentences_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ]))
+        story.append(sentences_table)
     
     # Build PDF
     doc.build(story)
@@ -240,24 +230,38 @@ def home():
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
+        print("Starting text analysis")
         if 'file' in request.files:
+            print("Processing uploaded file")
             file = request.files['file']
             if file and allowed_file(file.filename):
                 text = extract_text_from_file(file)
+                print(f"Extracted text from file: {file.filename}")
             else:
+                print("Invalid file format")
                 return jsonify({'error': 'Invalid file format'}), 400
         else:
+            print("Processing JSON data")
             data = request.get_json()
+            if data is None:
+                print("No JSON data received")
+                return jsonify({'error': 'No data provided'}), 400
             text = data.get('text', '').strip()
         
         if not text:
+            print("No text provided")
             return jsonify({'error': 'No text provided'}), 400
             
+        print(f"Analyzing text (length: {len(text)})")
         result = analyzer.analyze(text)
+        print("Analysis completed successfully")
         return jsonify(result)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error during analysis: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'An error occurred during analysis: {str(e)}'}), 500
 
 @app.route('/export/csv', methods=['POST'])
 def export_csv():
@@ -268,20 +272,21 @@ def export_csv():
             
         csv_content = create_analysis_csv(data)
         
-        # Create a buffer for the file
-        buffer = io.StringIO()
-        buffer.write(csv_content)
+        # Create a binary buffer for the file
+        buffer = io.BytesIO()
+        buffer.write(csv_content.encode('utf-8'))
         buffer.seek(0)
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         return send_file(
-            io.BytesIO(buffer.getvalue().encode('utf-8')),
+            buffer,
             mimetype='text/csv',
             as_attachment=True,
             download_name=f'sentiment_analysis_{timestamp}.csv'
         )
         
     except Exception as e:
+        print(f"CSV Export Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/export/pdf', methods=['POST'])
