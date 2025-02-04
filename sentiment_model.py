@@ -112,23 +112,96 @@ class SentimentAnalyzer:
                 if len(phrase.split()) > 1 and phrase.strip()]
 
     def get_emotion_scores(self, text):
-        """Enhanced emotion detection using transformer models."""
-        # Use the transformer model for more accurate sentiment
-        result = self.sentiment_pipeline(text)[0]
-        sentiment_score = result['score'] if result['label'] == 'POSITIVE' else -result['score']
-        
-        # Calculate emotion intensities
+        """Enhanced emotion detection using multiple signals."""
+        # Initialize emotion scores
         emotions = {
-            'joy': max(0, sentiment_score) if sentiment_score > 0 else 0,
-            'sadness': max(0, -sentiment_score) if sentiment_score < 0 else 0,
-            'anger': max(0, -sentiment_score * 0.5) if sentiment_score < -0.5 else 0,
-            'neutral': 1 - abs(sentiment_score) if abs(sentiment_score) < 0.3 else 0
+            'joy': 0.0,
+            'sadness': 0.0,
+            'anger': 0.0,
+            'neutral': 0.0
         }
+        
+        # Use TextBlob for initial sentiment analysis
+        blob = TextBlob(text)
+        polarity = blob.sentiment.polarity
+        subjectivity = blob.sentiment.subjectivity
+        
+        # Use transformer model for more accurate sentiment
+        result = self.sentiment_pipeline(text)[0]
+        transformer_score = result['score'] if result['label'] == 'POSITIVE' else -result['score']
+        
+        # Analyze text for emotion indicators
+        doc = self.nlp(text)
+        
+        # Emotion word lists
+        joy_words = {'happy', 'joy', 'excellent', 'good', 'great', 'wonderful', 'fantastic', 'amazing', 'love', 'beautiful'}
+        sadness_words = {'sad', 'unhappy', 'terrible', 'horrible', 'awful', 'disappointed', 'sorry', 'miss', 'lost', 'alone'}
+        anger_words = {'angry', 'mad', 'furious', 'hate', 'annoyed', 'frustrated', 'irritated', 'outraged', 'upset', 'hostile'}
+        
+        # Count emotion words
+        word_counts = {
+            'joy': 0,
+            'sadness': 0,
+            'anger': 0
+        }
+        
+        for token in doc:
+            lemma = token.lemma_.lower()
+            if lemma in joy_words:
+                word_counts['joy'] += 1
+            elif lemma in sadness_words:
+                word_counts['sadness'] += 1
+            elif lemma in anger_words:
+                word_counts['anger'] += 1
+        
+        # Calculate base emotion scores
+        total_emotion_words = sum(word_counts.values()) + 1  # Add 1 to avoid division by zero
+        
+        # Combine multiple signals for emotion scores
+        emotions['joy'] = (
+            0.4 * max(0, transformer_score) +
+            0.3 * max(0, polarity) +
+            0.3 * (word_counts['joy'] / total_emotion_words)
+        )
+        
+        emotions['sadness'] = (
+            0.4 * max(0, -transformer_score) +
+            0.3 * max(0, -polarity) +
+            0.3 * (word_counts['sadness'] / total_emotion_words)
+        )
+        
+        emotions['anger'] = (
+            0.3 * max(0, -transformer_score) +
+            0.3 * max(0, -polarity) +
+            0.4 * (word_counts['anger'] / total_emotion_words)
+        )
+        
+        # Calculate neutral score based on subjectivity and other emotions
+        other_emotions_intensity = sum(emotions.values())
+        emotions['neutral'] = max(0, 1 - subjectivity - other_emotions_intensity)
+        
+        # Adjust for sentence structure and punctuation
+        exclamation_count = text.count('!')
+        question_count = text.count('?')
+        
+        if exclamation_count > 0:
+            # Increase the intensity of the strongest non-neutral emotion
+            strongest_emotion = max(
+                ['joy', 'sadness', 'anger'],
+                key=lambda e: emotions[e]
+            )
+            emotions[strongest_emotion] *= (1 + 0.1 * min(exclamation_count, 3))
+        
+        if question_count > 0:
+            # Questions tend to be more neutral
+            emotions['neutral'] = max(0.2, emotions['neutral'])
         
         # Normalize emotions to sum to 1
         total = sum(emotions.values())
         if total > 0:
             emotions = {k: v/total for k, v in emotions.items()}
+        else:
+            emotions['neutral'] = 1.0
         
         return emotions
 

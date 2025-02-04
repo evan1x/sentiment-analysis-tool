@@ -296,10 +296,10 @@ function updateEmotionChart(emotions) {
             datasets: [{
                 data: Object.values(emotions),
                 backgroundColor: [
-                    '#28a745', // joy - green
-                    '#6c757d', // sadness - gray
                     '#dc3545', // anger - red
-                    '#ffc107'  // neutral - yellow
+                    '#28a745', // joy - green
+                    '#ffc107', // neutral - yellow
+                    '#6c757d'  // sadness - gray
                 ]
             }]
         },
