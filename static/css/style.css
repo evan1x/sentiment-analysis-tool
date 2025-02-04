@@ -93,6 +93,65 @@ textarea.form-control {
     box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
 }
 
+/* Button Group Styles */
+.button-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin: 1rem 0;
+}
+
+.button-group button {
+    min-width: 120px;
+}
+
+/* Export Buttons */
+.export-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.export-btn {
+    padding: 0.5rem 1.25rem;
+    font-weight: 500;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    min-width: 140px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.export-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.export-btn i {
+    margin-right: 0.5rem;
+}
+
+/* CSV Button */
+.btn-success.export-btn {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-success.export-btn:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+/* PDF Button */
+.btn-danger.export-btn {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.btn-danger.export-btn:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
 /* Results Section */
 .results-section {
     opacity: 0;

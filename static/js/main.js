@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const spinner = submitButton.querySelector('.spinner-border');
     const textInput = document.getElementById('text');
     const fileInput = document.getElementById('fileInput');
-    const exportPDFButton = document.getElementById('exportPDF');
+    const exportPDFButton = document.getElementById('exportPDFButton');
     const exportCSVButton = document.getElementById('exportCSV');
 
     // Handle file input changes
@@ -90,37 +90,60 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    exportPDFButton.addEventListener('click', async function() {
-        if (!lastAnalysisResult) return;
+    exportPDFButton.addEventListener('click', exportToPDF);
+
+    function exportToPDF() {
+        console.log('Export to PDF clicked');
+        console.log('Last analysis result:', lastAnalysisResult);
         
-        try {
-            const response = await fetch('/export/pdf', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(lastAnalysisResult)
-            });
-            
-            if (response.ok) {
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `sentiment_analysis_${new Date().toISOString().slice(0,19).replace(/[:]/g, '')}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                a.remove();
-            } else {
-                const error = await response.json();
-                alert(error.error || 'Failed to export PDF');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Failed to export PDF');
+        if (!lastAnalysisResult) {
+            alert('Please analyze some text before exporting to PDF');
+            return;
         }
-    });
+
+        console.log('Sending request to /export/pdf');
+        fetch('/export/pdf', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(lastAnalysisResult)
+        })
+        .then(async response => {
+            console.log('Response received:', response);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to generate PDF');
+            }
+            if (response.headers.get('Content-Type') === 'application/json') {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Server returned JSON instead of PDF');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            console.log('Blob received, size:', blob.size);
+            if (blob.size === 0) {
+                throw new Error('Generated PDF is empty');
+            }
+            console.log('Creating download');
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            a.download = `sentiment_analysis_${timestamp}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            console.log('Download initiated');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to export PDF: ' + error.message);
+        });
+    }
 });
 
 // Debounce function for real-time analysis
@@ -195,6 +218,7 @@ async function performAnalysis(text) {
         const data = await response.json();
         
         if (response.ok) {
+            console.log('Analysis completed, storing result:', data);
             lastAnalysisResult = data;
             displayResults(data);
             resultsSection.classList.add('visible');
@@ -203,7 +227,7 @@ async function performAnalysis(text) {
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('An error occurred while connecting to the server');
+        alert('An error occurred during analysis');
     } finally {
         submitButton.disabled = false;
         buttonText.textContent = 'Analyze Text';
