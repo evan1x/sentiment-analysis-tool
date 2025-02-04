@@ -15,6 +15,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function initFileUpload() {
         const dropZone = document.getElementById('dropZone');
         const browseButton = document.getElementById('browseButton');
+        const fileInput = document.getElementById('fileInput');
+
+        function updateFileName(file) {
+            const uploadText = dropZone.querySelector('.upload-text');
+            if (file) {
+                uploadText.innerHTML = `<span>${file.name}</span>`;
+            } else {
+                uploadText.innerHTML = '<span>Drop your file here or</span><button type="button" class="btn btn-link p-0 mx-1" id="browseButton">browse</button>';
+            }
+        }
 
         dropZone.addEventListener('click', (e) => {
             if (e.target !== browseButton && !browseButton.contains(e.target)) {
@@ -56,6 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fileInput.files = files;
             
             if (files.length > 0) {
+                updateFileName(files[0]);
                 textInput.value = ''; 
                 textInput.disabled = true;
                 buttonText.innerHTML = '<i class="fas fa-search me-2"></i>Analyze File';
@@ -65,6 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
+                updateFileName(file);
                 textInput.value = ''; 
                 textInput.disabled = true;
                 buttonText.innerHTML = '<i class="fas fa-search me-2"></i>Analyze File';

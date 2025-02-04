@@ -62,31 +62,40 @@ def create_analysis_csv(result):
     main_df = pd.DataFrame({
         'Metric': ['Sentiment', 'Polarity', 'Subjectivity', 'Word Count', 'Sentence Count'],
         'Value': [
-            result['sentiment'],
-            result['polarity'],
-            result['subjectivity'],
-            result['word_count'],
-            result['sentence_count']
+            result.get('sentiment', 'N/A'),
+            result.get('polarity', 0),
+            result.get('subjectivity', 0),
+            result.get('word_count', 0),
+            result.get('sentence_count', 0)
         ]
     })
     
+    # Handle emotions data
+    emotions = result.get('emotions', {})
     emotions_df = pd.DataFrame({
-        'Emotion': list(result['emotions'].keys()),
-        'Score': list(result['emotions'].values())
-    })
+        'Emotion': list(emotions.keys()),
+        'Score': list(emotions.values())
+    }) if emotions else pd.DataFrame(columns=['Emotion', 'Score'])
     
-    key_phrases_df = pd.DataFrame(result['key_phrases'])
+    # Handle key phrases data
+    key_phrases = result.get('key_phrases', [])
+    key_phrases_df = pd.DataFrame({'Phrase': key_phrases}) if key_phrases else pd.DataFrame(columns=['Phrase'])
     
-    sentences_df = pd.DataFrame([{
-        'Text': s['text'],
-        'Polarity': s['polarity'],
-        'Subjectivity': s['subjectivity']
-    } for s in result['sentences']])
+    # Handle sentence analysis data
+    sentence_analysis = result.get('sentence_analysis', [])
+    if sentence_analysis:
+        sentences_df = pd.DataFrame([{
+            'Text': s.get('text', ''),
+            'Polarity': s.get('polarity', 0),
+            'Subjectivity': s.get('subjectivity', 0)
+        } for s in sentence_analysis])
+    else:
+        sentences_df = pd.DataFrame(columns=['Text', 'Polarity', 'Subjectivity'])
     
     # Create a buffer for the CSV file
     output = io.StringIO()
     
-    # Write each section to the CSV
+    # Write each section to the CSV with headers
     output.write("MAIN METRICS\n")
     main_df.to_csv(output, index=False)
     
