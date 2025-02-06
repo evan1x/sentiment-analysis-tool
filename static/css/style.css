@@ -1,6 +1,6 @@
 /* Global Styles */
 :root {
-    --primary-color: #3498db;
+    --primary-color: #274e68;
     --primary-color-alpha: rgba(52, 152, 219, 0.2);
     --secondary-color: #2ecc71;
     --danger-color: #e74c3c;
@@ -18,7 +18,7 @@
     --card-bg: #ffffff;
     --input-bg: #ffffff;
     --background-main: #f8f9fa;
-    --metric-color: #0d6efd;
+    --metric-color: #274e68;
 }
 
 [data-theme="dark"] {
@@ -31,7 +31,7 @@
     --card-bg: #2d2d2d;
     --input-bg: #1e1e1e;
     --background-main: #121212;
-    --metric-color: #64b5f6;
+    --metric-color: #274e68;
 }
 
 [data-theme="dark"] textarea {
@@ -124,6 +124,7 @@ textarea {
     resize: vertical;
     transition: all 0.3s ease;
     -webkit-appearance: none;
+    resize: none;
 }
 
 textarea:focus {
@@ -511,87 +512,123 @@ textarea::placeholder {
 
 /* Emotion Distribution Section */
 .emotion-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    padding: 1rem;
     background: var(--card-bg);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
+    border-radius: 10px;
     box-shadow: var(--card-shadow);
 }
 
-.emotion-content {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    align-items: center;
-    margin-top: 1rem;
-}
-
-.chart-container {
+.emotion-chart-container {
     position: relative;
-    width: 100%;
     height: 300px;
+    margin-bottom: 2rem;
 }
 
-.emotion-stats {
-    padding: 1rem;
-    background: var(--bg-secondary);
-    border-radius: 8px;
-}
-
-.emotion-list {
+#emotionList {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 1rem;
 }
 
 .emotion-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
+    gap: 1rem;
+    padding: 0.75rem;
     background: var(--card-bg);
-    border-radius: 6px;
-    transition: transform 0.2s ease;
+    border-radius: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .emotion-item:hover {
-    transform: translateX(5px);
-}
-
-.emotion-name {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 500;
+    transform: translateY(-2px);
+    box-shadow: var(--hover-shadow);
 }
 
 .emotion-icon {
-    width: 24px;
-    height: 24px;
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
+    background: var(--hover-bg);
     border-radius: 50%;
-    color: white;
 }
 
-.emotion-value {
+.emotion-details {
+    flex: 1;
+}
+
+.emotion-name {
     font-weight: 600;
-    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
 }
 
-.emotion-bar {
-    height: 6px;
-    background: var(--bg-secondary);
-    border-radius: 3px;
-    margin-top: 0.5rem;
+.emotion-score {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.progress {
+    flex: 1;
+    height: 8px;
+    background: var(--hover-bg);
+    border-radius: 4px;
     overflow: hidden;
 }
 
-.emotion-bar-fill {
+.progress-bar {
     height: 100%;
-    border-radius: 3px;
+    border-radius: 4px;
     transition: width 0.3s ease;
+}
+
+.percentage {
+    min-width: 4rem;
+    text-align: right;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+/* Dark mode specific styles */
+.dark-mode .emotion-item {
+    background: var(--dark-card-bg);
+}
+
+.dark-mode .emotion-icon {
+    background: var(--dark-hover-bg);
+}
+
+.dark-mode .progress {
+    background: var(--dark-hover-bg);
+}
+
+/* Scrollbar styles for emotion list */
+#emotionList::-webkit-scrollbar {
+    width: 8px;
+}
+
+#emotionList::-webkit-scrollbar-track {
+    background: var(--hover-bg);
+    border-radius: 4px;
+}
+
+#emotionList::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 4px;
+}
+
+#emotionList::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-hover);
 }
 
 /* Emotion-specific colors */
@@ -617,6 +654,80 @@ textarea::placeholder {
 
 .emotion-neutral {
     background: #95a5a6;
+}
+
+/* Enhanced Emotion Display */
+.emotion-icon-container {
+    display: flex;
+    align-items: center;
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    background: var(--card-bg);
+    transition: transform 0.2s ease;
+}
+
+.emotion-icon-container:hover {
+    transform: translateX(5px);
+}
+
+.emotion-icon {
+    font-size: 1.5rem;
+    margin-right: 1rem;
+    width: 2rem;
+    text-align: center;
+}
+
+.emotion-label {
+    flex-grow: 1;
+    font-size: 0.9rem;
+}
+
+.confidence-score {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+}
+
+.emotion-chart-container {
+    position: relative;
+    height: 300px;
+    margin: 2rem 0;
+}
+
+.emotion-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+@media (max-width: 768px) {
+    .emotion-summary {
+        grid-template-columns: 1fr;
+    }
+}
+
+.chart-legend-item {
+    display: flex;
+    align-items: center;
+    margin: 0.25rem 0;
+}
+
+.chart-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.chart-tooltip {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 /* Footer */

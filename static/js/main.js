@@ -259,25 +259,30 @@ document.addEventListener('DOMContentLoaded', function() {
 function displayResults(data) {
     const results = document.getElementById('results');
     
-    // Update sentiment values
+    // Update sentiment values with null checks
     document.getElementById('sentimentValue').textContent = data.sentiment || '-';
-    document.getElementById('polarityValue').textContent = data.polarity ? data.polarity.toFixed(2) : '-';
-    document.getElementById('subjectivityValue').textContent = data.subjectivity ? data.subjectivity.toFixed(2) : '-';
+    document.getElementById('polarityValue').textContent = typeof data.polarity === 'number' ? data.polarity.toFixed(2) : '-';
+    document.getElementById('subjectivityValue').textContent = typeof data.subjectivity === 'number' ? data.subjectivity.toFixed(2) : '-';
     
     // Update emotion chart
-    if (data.emotions) {
+    if (data.emotions && Object.keys(data.emotions).length > 0) {
         updateEmotionChart(data.emotions);
     }
     
     // Update key phrases
-    if (data.key_phrases) {
-        const keyPhrasesContainer = document.getElementById('keyPhrases');
-        keyPhrasesContainer.innerHTML = '';
+    const keyPhrasesContainer = document.getElementById('keyPhrases');
+    keyPhrasesContainer.innerHTML = '';
+    if (data.key_phrases && Array.isArray(data.key_phrases)) {
         data.key_phrases.forEach(phrase => {
-            const phraseEl = document.createElement('div');
-            phraseEl.className = 'phrase-card';
-            phraseEl.textContent = phrase;
-            keyPhrasesContainer.appendChild(phraseEl);
+            if (phrase && typeof phrase === 'object') {
+                const phraseEl = document.createElement('div');
+                phraseEl.className = 'phrase-card';
+                phraseEl.textContent = phrase.phrase || phrase.text || 'Unknown phrase';
+                if (phrase.type) {
+                    phraseEl.title = `Type: ${phrase.type}`;
+                }
+                keyPhrasesContainer.appendChild(phraseEl);
+            }
         });
     }
     
@@ -287,16 +292,29 @@ function displayResults(data) {
     
     if (data.sentence_analysis && Array.isArray(data.sentence_analysis)) {
         data.sentence_analysis.forEach(sentence => {
-            const sentenceEl = document.createElement('div');
-            sentenceEl.className = `sentence-item ${getSentimentClass(sentence.polarity)}`;
-            sentenceEl.innerHTML = `
-                <p>${sentence.text}</p>
-                <div class="sentence-metrics">
-                    <span>Polarity: ${sentence.polarity.toFixed(2)}</span>
-                    <span>Subjectivity: ${sentence.subjectivity.toFixed(2)}</span>
-                </div>
-            `;
-            sentenceContainer.appendChild(sentenceEl);
+            if (sentence && typeof sentence === 'object' && sentence.text) {
+                const sentenceEl = document.createElement('div');
+                const polarity = typeof sentence.polarity === 'number' ? sentence.polarity : 0;
+                sentenceEl.className = `sentence-item ${getSentimentClass(polarity)}`;
+                
+                // Build the metrics HTML with null checks
+                const metricsHtml = [];
+                if (typeof sentence.polarity === 'number') {
+                    metricsHtml.push(`<span>Polarity: ${sentence.polarity.toFixed(2)}</span>`);
+                }
+                if (sentence.dominant_emotion) {
+                    metricsHtml.push(`<span>Emotion: ${sentence.dominant_emotion}</span>`);
+                }
+                if (typeof sentence.emotion_score === 'number') {
+                    metricsHtml.push(`<span>Confidence: ${sentence.emotion_score.toFixed(2)}</span>`);
+                }
+                
+                sentenceEl.innerHTML = `
+                    <p>${sentence.text}</p>
+                    ${metricsHtml.length > 0 ? `<div class="sentence-metrics">${metricsHtml.join('')}</div>` : ''}
+                `;
+                sentenceContainer.appendChild(sentenceEl);
+            }
         });
     }
     
@@ -306,68 +324,122 @@ function displayResults(data) {
 
 function updateEmotionChart(emotions) {
     const ctx = document.getElementById('emotionChart').getContext('2d');
-    const emotionList = document.getElementById('emotionList');
     
-    // Clear previous emotion list
-    emotionList.innerHTML = '';
-    
+    // Define emotion colors
+    const emotionColors = {
+        'joy': '#FFD700',        // Gold
+        'sadness': '#4169E1',    // Royal Blue
+        'anger': '#DC143C',      // Crimson
+        'fear': '#800080',       // Purple
+        'surprise': '#FFA500',   // Orange
+        'disgust': '#006400',    // Dark Green
+        'trust': '#20B2AA',      // Light Sea Green
+        'anticipation': '#FF69B4',// Hot Pink
+        'love': '#FF1493',       // Deep Pink
+        'admiration': '#9370DB',  // Medium Purple
+        'optimism': '#98FB98',   // Pale Green
+        'pessimism': '#708090',  // Slate Gray
+        'neutral': '#808080'     // Gray
+    };
+
+    // Sort emotions by intensity
+    const sortedEmotions = Object.entries(emotions)
+        .sort(([, a], [, b]) => b - a)
+        .filter(([, value]) => value >= 0.05); // Only show emotions with at least 5% intensity
+
+    const labels = sortedEmotions.map(([emotion]) => emotion);
+    const data = sortedEmotions.map(([, value]) => (value * 100).toFixed(1));
+    const colors = sortedEmotions.map(([emotion]) => emotionColors[emotion] || '#808080');
+
+    // Destroy previous chart if it exists
     if (emotionChart) {
         emotionChart.destroy();
     }
-    
-    const labels = Object.keys(emotions);
-    const data = Object.values(emotions);
-    
-    // Create the chart
+
+    // Create new chart
     emotionChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: labels.map(label => label.charAt(0).toUpperCase() + label.slice(1)),
+            labels: labels,
             datasets: [{
                 data: data,
-                backgroundColor: labels.map(getEmotionColor),
-                borderWidth: 2,
-                borderColor: '#ffffff'
+                backgroundColor: colors,
+                borderColor: 'rgba(255, 255, 255, 0.5)',
+                borderWidth: 2
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '65%',
             plugins: {
                 legend: {
-                    display: false
+                    position: 'right',
+                    labels: {
+                        color: document.body.classList.contains('dark-mode') ? '#fff' : '#333',
+                        font: {
+                            size: 12
+                        },
+                        generateLabels: (chart) => {
+                            const data = chart.data;
+                            if (data.labels.length && data.datasets.length) {
+                                return data.labels.map((label, i) => ({
+                                    text: `${label} (${data.datasets[0].data[i]}%)`,
+                                    fillStyle: data.datasets[0].backgroundColor[i],
+                                    strokeStyle: data.datasets[0].borderColor,
+                                    lineWidth: data.datasets[0].borderWidth,
+                                    hidden: isNaN(data.datasets[0].data[i]),
+                                    index: i
+                                }));
+                            }
+                            return [];
+                        }
+                    }
                 },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
-                            const value = context.raw;
-                            return `${(value * 100).toFixed(1)}%`;
+                        label: (context) => {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            return `${label}: ${value}%`;
                         }
                     }
                 }
+            },
+            cutout: '60%',
+            animation: {
+                animateScale: true,
+                animateRotate: true
             }
         }
     });
-    
-    // Create emotion list items
-    labels.forEach((emotion, index) => {
-        const percentage = (data[index] * 100).toFixed(1);
-        const emotionColor = getEmotionColor(emotion);
-        const emotionIcon = getEmotionIcon(emotion);
-        
+
+    // Update emotion list display
+    const emotionList = document.getElementById('emotionList');
+    emotionList.innerHTML = '';
+
+    sortedEmotions.forEach(([emotion, value]) => {
         const emotionItem = document.createElement('div');
         emotionItem.className = 'emotion-item';
+        const percentage = (value * 100).toFixed(1);
+        
+        // Get the emotion icon
+        const icon = getEmotionIcon(emotion);
+        
         emotionItem.innerHTML = `
-            <div class="emotion-name">
-                <div class="emotion-icon" style="background: ${emotionColor}">
-                    <i class="${emotionIcon}"></i>
-                </div>
-                ${emotion.charAt(0).toUpperCase() + emotion.slice(1)}
+            <div class="emotion-icon" style="color: ${emotionColors[emotion]}">
+                ${icon}
             </div>
-            <div class="emotion-value">${percentage}%</div>
-            <div class="emotion-bar">
-                <div class="emotion-bar-fill" style="width: ${percentage}%; background: ${emotionColor}"></div>
+            <div class="emotion-details">
+                <div class="emotion-name">${emotion.charAt(0).toUpperCase() + emotion.slice(1)}</div>
+                <div class="emotion-score">
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" 
+                             style="width: ${percentage}%; background-color: ${emotionColors[emotion]}" 
+                             aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100">
+                        </div>
+                    </div>
+                    <span class="percentage">${percentage}%</span>
+                </div>
             </div>
         `;
         
@@ -377,26 +449,21 @@ function updateEmotionChart(emotions) {
 
 function getEmotionIcon(emotion) {
     const icons = {
-        'joy': 'fas fa-smile',
-        'sadness': 'fas fa-sad-tear',
-        'anger': 'fas fa-angry',
-        'fear': 'fas fa-ghost',
-        'surprise': 'fas fa-surprise',
-        'neutral': 'fas fa-meh'
+        'joy': '<i class="fas fa-smile-beam"></i>',
+        'sadness': '<i class="fas fa-sad-tear"></i>',
+        'anger': '<i class="fas fa-angry"></i>',
+        'fear': '<i class="fas fa-ghost"></i>',
+        'surprise': '<i class="fas fa-surprise"></i>',
+        'disgust': '<i class="fas fa-grimace"></i>',
+        'trust': '<i class="fas fa-handshake"></i>',
+        'anticipation': '<i class="fas fa-hourglass-half"></i>',
+        'love': '<i class="fas fa-heart"></i>',
+        'admiration': '<i class="fas fa-star"></i>',
+        'optimism': '<i class="fas fa-sun"></i>',
+        'pessimism': '<i class="fas fa-cloud"></i>',
+        'neutral': '<i class="fas fa-meh"></i>'
     };
-    return icons[emotion.toLowerCase()] || 'fas fa-question';
-}
-
-function getEmotionColor(emotion) {
-    const colors = {
-        'joy': '#2ecc71',
-        'sadness': '#3498db',
-        'anger': '#e74c3c',
-        'fear': '#9b59b6',
-        'surprise': '#f1c40f',
-        'neutral': '#95a5a6'
-    };
-    return colors[emotion.toLowerCase()] || '#95a5a6';
+    return icons[emotion] || '<i class="fas fa-question-circle"></i>';
 }
 
 function getSentimentClass(polarity) {

@@ -52,8 +52,8 @@
     <div class="app-container">
         <nav class="navbar navbar-expand-lg">
             <div class="container">
-                <span class="navbar-brand">
-                    <i class="fas fa-brain text-primary me-2"></i>
+                <span class="navbar-brand" style="font-weight: 600;">
+                    <i class="fas fa-brain"></i>
                     Sentiment AI
                 </span>
             </div>
@@ -133,17 +133,15 @@
                                 </div>
                             </div>
 
-                            <div class="emotion-section">
-                                <h4 class="section-title">Emotion Distribution</h4>
-                                <div class="emotion-content">
-                                    <div class="chart-container">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Emotion Distribution</h3>
+                                </div>
+                                <div class="card-body emotion-section">
+                                    <div class="emotion-chart-container">
                                         <canvas id="emotionChart"></canvas>
                                     </div>
-                                    <div class="emotion-stats">
-                                        <div id="emotionList" class="emotion-list">
-                                            <!-- Emotion items will be added here dynamically -->
-                                        </div>
-                                    </div>
+                                    <div id="emotionList"></div>
                                 </div>
                             </div>
 
