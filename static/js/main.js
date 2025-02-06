@@ -2,6 +2,18 @@ let emotionChart = null;
 let lastAnalysisResult = null;
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Add Chart.js script dynamically and wait for it to load
+    const chartScript = document.createElement('script');
+    chartScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+    chartScript.onload = function() {
+        // Initialize any global chart settings after Chart.js loads
+        if (window.Chart) {
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            Chart.defaults.color = getComputedStyle(document.documentElement).getPropertyValue('--text-color');
+        }
+    };
+    document.head.appendChild(chartScript);
+
     const analyzeButton = document.getElementById('analyzeButton');
     const form = document.getElementById('analysisForm');
     const resultsSection = document.getElementById('results');
@@ -16,9 +28,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const dropZone = document.getElementById('dropZone');
         const browseButton = document.getElementById('browseButton');
         const fileInput = document.getElementById('fileInput');
+        const textInput = document.getElementById('text');
+        const buttonText = document.querySelector('#analyzeButton .button-text');
+
+        if (!dropZone || !browseButton || !fileInput || !textInput || !buttonText) {
+            console.error('Required elements for file upload not found');
+            return;
+        }
 
         function updateFileName(file) {
             const uploadText = dropZone.querySelector('.upload-text');
+            if (!uploadText) {
+                console.error('Upload text element not found');
+                return;
+            }
             if (file) {
                 uploadText.innerHTML = `<span>${file.name}</span>`;
             } else {
@@ -27,7 +50,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         dropZone.addEventListener('click', (e) => {
-            if (e.target !== browseButton && !browseButton.contains(e.target)) {
+            const browseBtn = document.getElementById('browseButton');
+            if (browseBtn && (e.target !== browseBtn && !browseBtn.contains(e.target))) {
                 fileInput.click();
             }
         });
@@ -257,115 +281,184 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function displayResults(data) {
-    const results = document.getElementById('results');
-    
-    // Update sentiment values with null checks
-    document.getElementById('sentimentValue').textContent = data.sentiment || '-';
-    document.getElementById('polarityValue').textContent = typeof data.polarity === 'number' ? data.polarity.toFixed(2) : '-';
-    document.getElementById('subjectivityValue').textContent = typeof data.subjectivity === 'number' ? data.subjectivity.toFixed(2) : '-';
-    
-    // Update emotion chart
-    if (data.emotions && Object.keys(data.emotions).length > 0) {
-        updateEmotionChart(data.emotions);
-    }
-    
-    // Update key phrases
+    const resultsSection = document.getElementById('results');
+    const sentimentResult = document.getElementById('sentimentResult');
+    const emotionContainer = document.getElementById('emotionDistribution');
     const keyPhrasesContainer = document.getElementById('keyPhrases');
-    keyPhrasesContainer.innerHTML = '';
-    if (data.key_phrases && Array.isArray(data.key_phrases)) {
-        data.key_phrases.forEach(phrase => {
-            if (phrase && typeof phrase === 'object') {
-                const phraseEl = document.createElement('div');
-                phraseEl.className = 'phrase-card';
-                phraseEl.textContent = phrase.phrase || phrase.text || 'Unknown phrase';
-                if (phrase.type) {
-                    phraseEl.title = `Type: ${phrase.type}`;
-                }
-                keyPhrasesContainer.appendChild(phraseEl);
-            }
-        });
+    const sentenceAnalysisContainer = document.getElementById('sentenceAnalysis');
+
+    if (!resultsSection || !sentimentResult || !emotionContainer || !keyPhrasesContainer || !sentenceAnalysisContainer) {
+        console.error('Required results elements not found');
+        return;
     }
-    
-    // Update sentence analysis
-    const sentenceContainer = document.getElementById('sentenceAnalysis');
-    sentenceContainer.innerHTML = '';
-    
-    if (data.sentence_analysis && Array.isArray(data.sentence_analysis)) {
-        data.sentence_analysis.forEach(sentence => {
-            if (sentence && typeof sentence === 'object' && sentence.text) {
-                const sentenceEl = document.createElement('div');
-                const polarity = typeof sentence.polarity === 'number' ? sentence.polarity : 0;
-                sentenceEl.className = `sentence-item ${getSentimentClass(polarity)}`;
-                
-                // Build the metrics HTML with null checks
-                const metricsHtml = [];
-                if (typeof sentence.polarity === 'number') {
-                    metricsHtml.push(`<span>Polarity: ${sentence.polarity.toFixed(2)}</span>`);
-                }
-                if (sentence.dominant_emotion) {
-                    metricsHtml.push(`<span>Emotion: ${sentence.dominant_emotion}</span>`);
-                }
-                if (typeof sentence.emotion_score === 'number') {
-                    metricsHtml.push(`<span>Confidence: ${sentence.emotion_score.toFixed(2)}</span>`);
-                }
-                
-                sentenceEl.innerHTML = `
-                    <p>${sentence.text}</p>
-                    ${metricsHtml.length > 0 ? `<div class="sentence-metrics">${metricsHtml.join('')}</div>` : ''}
-                `;
-                sentenceContainer.appendChild(sentenceEl);
-            }
+
+    // Update sentiment section
+    const sentimentClass = getSentimentClass(data.polarity);
+    sentimentResult.innerHTML = `
+        <div class="metric ${sentimentClass}">
+            <h3>Overall Sentiment</h3>
+            <p class="sentiment-value">${data.sentiment}</p>
+            <div class="confidence-bar">
+                <div class="confidence-fill" style="width: ${data.polarity * 100}%"></div>
+            </div>
+            <p class="confidence-value">Confidence: ${(data.polarity * 100).toFixed(1)}%</p>
+        </div>
+    `;
+
+    // Update emotion distribution
+    const emotionCards = emotionContainer.querySelector('.emotion-cards');
+    emotionCards.innerHTML = ''; // Clear existing cards
+
+    // Check if we're in a neutral state (all emotions near 0)
+    const emotions = data.emotions;
+    const isNeutral = Object.values(emotions).every(emotion => emotion.score < 0.1);
+
+    if (isNeutral) {
+        // Display only neutral emotion
+        const card = document.createElement('div');
+        card.className = 'emotion-card emotion-neutral';
+        card.setAttribute('data-description', 'No strong emotions detected');
+        
+        card.innerHTML = `
+            <div class="emotion-header">
+                <span class="emotion-icon">😐</span>
+                <span class="emotion-name">Neutral</span>
+            </div>
+            <div class="emotion-score">
+                <div class="emotion-score-fill" style="width: 100%"></div>
+            </div>
+            <div class="emotion-percentage">100%</div>
+        `;
+        
+        emotionCards.appendChild(card);
+        
+        // Update pie chart for neutral state
+        updateEmotionChart([{
+            name: 'Neutral',
+            score: 1,
+            color: '#9e9e9e'
+        }]);
+    } else {
+        // Convert emotions object to array and sort by score
+        const emotionArray = Object.entries(emotions)
+            .map(([emotion, emotionData]) => ({
+                name: emotion,
+                score: emotionData.score,
+                symbol: emotionData.symbol,
+                description: emotionData.description
+            }))
+            .filter(emotion => emotion.score > 0.05) // Filter out very low scores
+            .sort((a, b) => b.score - a.score);
+
+        // Create cards for each emotion
+        emotionArray.forEach(emotion => {
+            const card = document.createElement('div');
+            card.className = `emotion-card emotion-${emotion.name}`;
+            card.setAttribute('data-description', emotion.description);
+
+            const percentage = (emotion.score * 100).toFixed(1);
+            
+            card.innerHTML = `
+                <div class="emotion-header">
+                    <span class="emotion-icon">${emotion.symbol}</span>
+                    <span class="emotion-name">${emotion.name}</span>
+                </div>
+                <div class="emotion-score">
+                    <div class="emotion-score-fill" style="width: ${percentage}%"></div>
+                </div>
+                <div class="emotion-percentage">${percentage}%</div>
+            `;
+
+            emotionCards.appendChild(card);
+            card.style.animationDelay = `${emotionCards.children.length * 0.1}s`;
         });
+
+        // Update pie chart with emotion data
+        const chartData = emotionArray.map((emotion, index) => ({
+            name: emotion.name,
+            score: emotion.score,
+            color: getEmotionColor(index)
+        }));
+        updateEmotionChart(chartData);
+    }
+
+    // Update key phrases
+    if (data.key_phrases && data.key_phrases.length > 0) {
+        const phrasesList = data.key_phrases
+            .map(phrase => `<span class="badge bg-secondary me-2 mb-2">${phrase}</span>`)
+            .join('');
+        keyPhrasesContainer.innerHTML = `
+            <h3>Key Phrases</h3>
+            <div class="phrases-cloud">${phrasesList}</div>
+        `;
+    } else {
+        keyPhrasesContainer.innerHTML = '';
+    }
+
+    // Update sentence analysis
+    if (data.sentence_analysis && data.sentence_analysis.length > 0) {
+        const sentencesList = data.sentence_analysis
+            .map(sentence => `
+                <div class="sentence-item ${getSentimentClass(sentence.confidence)}">
+                    <p class="sentence-text">${sentence.text}</p>
+                    <div class="sentence-metadata">
+                        <span class="sentiment-label">${sentence.sentiment}</span>
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" 
+                                 style="width: ${sentence.confidence * 100}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `)
+            .join('');
+        sentenceAnalysisContainer.innerHTML = `
+            <h3>Sentence Analysis</h3>
+            <div class="sentences-list">${sentencesList}</div>
+        `;
+    } else {
+        sentenceAnalysisContainer.innerHTML = '';
+    }
+
+    // Show export buttons
+    const exportButtons = document.getElementById('exportButtons');
+    if (exportButtons) {
+        exportButtons.classList.remove('d-none');
     }
     
     // Make results visible
-    results.classList.add('visible');
+    resultsSection.classList.add('visible');
+}
+
+function getSentimentClass(polarity) {
+    if (polarity > 0.3) return 'positive';
+    if (polarity < -0.3) return 'negative';
+    return 'neutral';
 }
 
 function updateEmotionChart(emotions) {
-    const ctx = document.getElementById('emotionChart').getContext('2d');
-    
-    // Define emotion colors
-    const emotionColors = {
-        'joy': '#FFD700',        // Gold
-        'sadness': '#4169E1',    // Royal Blue
-        'anger': '#DC143C',      // Crimson
-        'fear': '#800080',       // Purple
-        'surprise': '#FFA500',   // Orange
-        'disgust': '#006400',    // Dark Green
-        'trust': '#20B2AA',      // Light Sea Green
-        'anticipation': '#FF69B4',// Hot Pink
-        'love': '#FF1493',       // Deep Pink
-        'admiration': '#9370DB',  // Medium Purple
-        'optimism': '#98FB98',   // Pale Green
-        'pessimism': '#708090',  // Slate Gray
-        'neutral': '#808080'     // Gray
-    };
-
-    // Sort emotions by intensity
-    const sortedEmotions = Object.entries(emotions)
-        .sort(([, a], [, b]) => b - a)
-        .filter(([, value]) => value >= 0.05); // Only show emotions with at least 5% intensity
-
-    const labels = sortedEmotions.map(([emotion]) => emotion);
-    const data = sortedEmotions.map(([, value]) => (value * 100).toFixed(1));
-    const colors = sortedEmotions.map(([emotion]) => emotionColors[emotion] || '#808080');
-
-    // Destroy previous chart if it exists
-    if (emotionChart) {
-        emotionChart.destroy();
+    // Wait for Chart to be available
+    if (!window.Chart) {
+        console.log('Chart.js not loaded yet, retrying in 100ms...');
+        setTimeout(() => updateEmotionChart(emotions), 100);
+        return;
     }
 
-    // Create new chart
-    emotionChart = new Chart(ctx, {
+    const ctx = document.getElementById('emotionChart');
+    if (!ctx) return;
+
+    // Destroy existing chart if it exists
+    if (window.emotionChart && window.emotionChart.destroy) {
+        window.emotionChart.destroy();
+    }
+
+    window.emotionChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: labels,
+            labels: emotions.map(e => e.name),
             datasets: [{
-                data: data,
-                backgroundColor: colors,
-                borderColor: 'rgba(255, 255, 255, 0.5)',
-                borderWidth: 2
+                data: emotions.map(e => e.score),
+                backgroundColor: emotions.map(e => e.color),
+                borderWidth: 0
             }]
         },
         options: {
@@ -375,99 +468,44 @@ function updateEmotionChart(emotions) {
                 legend: {
                     position: 'right',
                     labels: {
-                        color: document.body.classList.contains('dark-mode') ? '#fff' : '#333',
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-color'),
                         font: {
-                            size: 12
+                            size: 12,
+                            family: "'Inter', sans-serif"
                         },
-                        generateLabels: (chart) => {
-                            const data = chart.data;
-                            if (data.labels.length && data.datasets.length) {
-                                return data.labels.map((label, i) => ({
-                                    text: `${label} (${data.datasets[0].data[i]}%)`,
-                                    fillStyle: data.datasets[0].backgroundColor[i],
-                                    strokeStyle: data.datasets[0].borderColor,
-                                    lineWidth: data.datasets[0].borderWidth,
-                                    hidden: isNaN(data.datasets[0].data[i]),
-                                    index: i
-                                }));
-                            }
-                            return [];
-                        }
+                        padding: 15
                     }
                 },
                 tooltip: {
                     callbacks: {
-                        label: (context) => {
-                            const label = context.label || '';
-                            const value = context.parsed || 0;
-                            return `${label}: ${value}%`;
+                        label: function(context) {
+                            const value = context.raw;
+                            return `${context.label}: ${(value * 100).toFixed(1)}%`;
                         }
                     }
                 }
             },
             cutout: '60%',
             animation: {
-                animateScale: true,
-                animateRotate: true
+                animateRotate: true,
+                animateScale: true
             }
         }
     });
-
-    // Update emotion list display
-    const emotionList = document.getElementById('emotionList');
-    emotionList.innerHTML = '';
-
-    sortedEmotions.forEach(([emotion, value]) => {
-        const emotionItem = document.createElement('div');
-        emotionItem.className = 'emotion-item';
-        const percentage = (value * 100).toFixed(1);
-        
-        // Get the emotion icon
-        const icon = getEmotionIcon(emotion);
-        
-        emotionItem.innerHTML = `
-            <div class="emotion-icon" style="color: ${emotionColors[emotion]}">
-                ${icon}
-            </div>
-            <div class="emotion-details">
-                <div class="emotion-name">${emotion.charAt(0).toUpperCase() + emotion.slice(1)}</div>
-                <div class="emotion-score">
-                    <div class="progress">
-                        <div class="progress-bar" role="progressbar" 
-                             style="width: ${percentage}%; background-color: ${emotionColors[emotion]}" 
-                             aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100">
-                        </div>
-                    </div>
-                    <span class="percentage">${percentage}%</span>
-                </div>
-            </div>
-        `;
-        
-        emotionList.appendChild(emotionItem);
-    });
 }
 
-function getEmotionIcon(emotion) {
-    const icons = {
-        'joy': '<i class="fas fa-smile-beam"></i>',
-        'sadness': '<i class="fas fa-sad-tear"></i>',
-        'anger': '<i class="fas fa-angry"></i>',
-        'fear': '<i class="fas fa-ghost"></i>',
-        'surprise': '<i class="fas fa-surprise"></i>',
-        'disgust': '<i class="fas fa-grimace"></i>',
-        'trust': '<i class="fas fa-handshake"></i>',
-        'anticipation': '<i class="fas fa-hourglass-half"></i>',
-        'love': '<i class="fas fa-heart"></i>',
-        'admiration': '<i class="fas fa-star"></i>',
-        'optimism': '<i class="fas fa-sun"></i>',
-        'pessimism': '<i class="fas fa-cloud"></i>',
-        'neutral': '<i class="fas fa-meh"></i>'
-    };
-    return icons[emotion] || '<i class="fas fa-question-circle"></i>';
-}
-
-function getSentimentClass(polarity) {
-    if (polarity > 0.3) return 'positive';
-    if (polarity < -0.3) return 'negative';
-    return 'neutral';
+function getEmotionColor(index) {
+    const colors = [
+        '#FF6B6B', // Red
+        '#4ECDC4', // Teal
+        '#45B7D1', // Blue
+        '#96CEB4', // Green
+        '#FFEEAD', // Yellow
+        '#D4A5A5', // Pink
+        '#9B59B6', // Purple
+        '#3498DB', // Light Blue
+        '#E67E22', // Orange
+        '#1ABC9C'  // Turquoise
+    ];
+    return colors[index % colors.length];
 }

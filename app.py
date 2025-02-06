@@ -62,22 +62,27 @@ def create_analysis_csv(result):
     """Convert analysis result to CSV format"""
     # Create DataFrames for different aspects of the analysis
     main_df = pd.DataFrame({
-        'Metric': ['Sentiment', 'Polarity', 'Subjectivity', 'Word Count', 'Sentence Count'],
+        'Metric': ['Sentiment', 'Polarity'],
         'Value': [
             result.get('sentiment', 'N/A'),
-            result.get('polarity', 0),
-            result.get('subjectivity', 0),
-            result.get('word_count', 0),
-            result.get('sentence_count', 0)
+            result.get('polarity', 0)
         ]
     })
     
-    # Handle emotions data
+    # Handle emotions data with metadata
     emotions = result.get('emotions', {})
-    emotions_df = pd.DataFrame({
-        'Emotion': list(emotions.keys()),
-        'Score': list(emotions.values())
-    }) if emotions else pd.DataFrame(columns=['Emotion', 'Score'])
+    emotions_df = pd.DataFrame([
+        {
+            'Emotion': emotion,
+            'Score': data['score'],
+            'Description': data['description']
+        }
+        for emotion, data in emotions.items()
+    ]) if emotions else pd.DataFrame(columns=['Emotion', 'Score', 'Description'])
+    
+    # Sort emotions by score
+    if not emotions_df.empty:
+        emotions_df = emotions_df.sort_values('Score', ascending=False)
     
     # Handle key phrases data
     key_phrases = result.get('key_phrases', [])
@@ -88,11 +93,11 @@ def create_analysis_csv(result):
     if sentence_analysis:
         sentences_df = pd.DataFrame([{
             'Text': s.get('text', ''),
-            'Polarity': s.get('polarity', 0),
-            'Subjectivity': s.get('subjectivity', 0)
+            'Sentiment': s.get('sentiment', ''),
+            'Confidence': s.get('confidence', 0)
         } for s in sentence_analysis])
     else:
-        sentences_df = pd.DataFrame(columns=['Text', 'Polarity', 'Subjectivity'])
+        sentences_df = pd.DataFrame(columns=['Text', 'Sentiment', 'Confidence'])
     
     # Create a buffer for the CSV file
     output = io.StringIO()
@@ -100,14 +105,11 @@ def create_analysis_csv(result):
     # Write each section to the CSV with headers
     output.write("MAIN METRICS\n")
     main_df.to_csv(output, index=False)
-    
-    output.write("\nEMOTIONS\n")
+    output.write("\n\nEMOTIONS\n")
     emotions_df.to_csv(output, index=False)
-    
-    output.write("\nKEY PHRASES\n")
+    output.write("\n\nKEY PHRASES\n")
     key_phrases_df.to_csv(output, index=False)
-    
-    output.write("\nSENTENCE ANALYSIS\n")
+    output.write("\n\nSENTENCE ANALYSIS\n")
     sentences_df.to_csv(output, index=False)
     
     return output.getvalue()
@@ -116,7 +118,7 @@ def create_emotion_chart_image(emotions):
     """Create a pie chart for emotions and return it as a BytesIO object."""
     plt.figure(figsize=(6, 6))
     plt.pie(
-        list(emotions.values()),
+        [data['score'] for data in emotions.values()],
         labels=list(emotions.keys()),
         colors=['#dc3545', '#28a745', '#ffc107', '#6c757d'],
         autopct='%1.1f%%'
@@ -130,39 +132,33 @@ def create_emotion_chart_image(emotions):
     return img_buffer
 
 def create_analysis_pdf(result):
-    """Generate a PDF report of the sentiment analysis."""
+    """Generate a PDF report of the sentiment analysis"""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72)
     
-    # Styles
+    # Prepare the story (content)
+    story = []
     styles = getSampleStyleSheet()
     title_style = styles['Heading1']
     heading_style = styles['Heading2']
     normal_style = styles['Normal']
     
-    # Story (content elements)
-    story = []
-    
     # Title
-    story.append(Paragraph('Sentiment Analysis Report', title_style))
-    story.append(Spacer(1, 24))
-    
-    # Overall Metrics
-    story.append(Paragraph('Overall Metrics', heading_style))
+    story.append(Paragraph("Sentiment Analysis Report", title_style))
     story.append(Spacer(1, 12))
     
-    # Create metrics table
-    metrics_data = [
-        ['Metric', 'Value'],
-        ['Sentiment', str(result.get('sentiment', 'N/A'))],
-        ['Polarity', f"{result.get('polarity', 0):.2f}"],
-        ['Subjectivity', f"{result.get('subjectivity', 0):.2f}"],
-        ['Word Count', str(result.get('word_count', 0))],
-        ['Sentence Count', str(result.get('sentence_count', 0))]
+    # Main Metrics
+    story.append(Paragraph("Overall Sentiment", heading_style))
+    story.append(Spacer(1, 6))
+    
+    data = [
+        ["Metric", "Value"],
+        ["Sentiment", result.get('sentiment', 'N/A')],
+        ["Polarity", f"{result.get('polarity', 0):.2f}"]
     ]
     
-    metrics_table = Table(metrics_data, colWidths=[200, 200])
-    metrics_table.setStyle(TableStyle([
+    t = Table(data, colWidths=[200, 200])
+    t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -175,44 +171,25 @@ def create_analysis_pdf(result):
         ('FONTSIZE', (0, 1), (-1, -1), 12),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
-    story.append(metrics_table)
-    story.append(Spacer(1, 24))
+    story.append(t)
+    story.append(Spacer(1, 20))
     
-    # Emotions Section
-    if result.get('emotions'):
-        story.append(Paragraph('Emotion Distribution', heading_style))
-        story.append(Spacer(1, 12))
-        
-        # Create emotion chart
-        img_buffer = create_emotion_chart_image(result['emotions'])
-        img = Image(img_buffer, width=300, height=300)
-        story.append(img)
-        story.append(Spacer(1, 24))
+    # Emotions
+    story.append(Paragraph("Emotion Analysis", heading_style))
+    story.append(Spacer(1, 6))
     
-    # Key Phrases Section
-    if result.get('key_phrases'):
-        story.append(Paragraph('Key Phrases', heading_style))
-        story.append(Spacer(1, 12))
-        for phrase in result['key_phrases']:
-            story.append(Paragraph(f"• {phrase}", normal_style))
-        story.append(Spacer(1, 24))
-    
-    # Sentence Analysis
-    if result.get('sentences'):
-        story.append(Paragraph('Sentence Analysis', heading_style))
-        story.append(Spacer(1, 12))
-        
-        sentences_data = [['Sentence', 'Polarity', 'Subjectivity']]
-        for sentence in result['sentences']:
-            sentences_data.append([
-                Paragraph(sentence['text'], normal_style),
-                f"{sentence['polarity']:.2f}",
-                f"{sentence['subjectivity']:.2f}"
+    emotions = result.get('emotions', {})
+    if emotions:
+        emotion_data = [["Emotion", "Score", "Description"]]
+        for emotion, data in sorted(emotions.items(), key=lambda x: x[1]['score'], reverse=True):
+            emotion_data.append([
+                emotion,
+                f"{data['score']*100:.1f}%",
+                data['description']
             ])
         
-        # Create sentences table
-        sentences_table = Table(sentences_data, colWidths=[300, 100, 100])
-        sentences_table.setStyle(TableStyle([
+        t = Table(emotion_data, colWidths=[100, 100, 200])
+        t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -224,12 +201,39 @@ def create_analysis_pdf(result):
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 10),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('WORDWRAP', (0, 0), (-1, -1), True)
         ]))
-        story.append(sentences_table)
+        story.append(t)
+    else:
+        story.append(Paragraph("No emotion data available", normal_style))
     
-    # Build PDF
+    story.append(Spacer(1, 20))
+    
+    # Key Phrases
+    if result.get('key_phrases'):
+        story.append(Paragraph("Key Phrases", heading_style))
+        story.append(Spacer(1, 6))
+        phrases = [Paragraph(f"• {phrase}", normal_style) for phrase in result['key_phrases']]
+        for phrase in phrases:
+            story.append(phrase)
+        story.append(Spacer(1, 20))
+    
+    # Sentence Analysis
+    if result.get('sentence_analysis'):
+        story.append(Paragraph("Sentence Analysis", heading_style))
+        story.append(Spacer(1, 6))
+        
+        for sentence in result['sentence_analysis']:
+            p = Paragraph(
+                f"<b>{sentence['text']}</b><br/>"
+                f"Sentiment: {sentence['sentiment']}, "
+                f"Confidence: {sentence['confidence']*100:.1f}%",
+                normal_style
+            )
+            story.append(p)
+            story.append(Spacer(1, 12))
+    
+    # Build the PDF
     doc.build(story)
     buffer.seek(0)
     return buffer
